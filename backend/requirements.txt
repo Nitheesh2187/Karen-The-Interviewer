@@ -1,0 +1,7 @@
+fastapi
+uvicorn[standard]
+websockets
+groq
+python-dotenv
+pydantic-settings
+aiohttp
