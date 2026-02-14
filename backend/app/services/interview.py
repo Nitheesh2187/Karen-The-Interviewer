@@ -99,7 +99,7 @@ class InterviewSession:
                 self._answer_timer.cancel()
 
             self._answer_timer = asyncio.get_event_loop().call_later(
-                2.0, lambda: asyncio.ensure_future(self._process_answer())
+                5.0, lambda: asyncio.ensure_future(self._process_answer())
             )
 
     async def _process_answer(self):

@@ -1,9 +1,10 @@
+import io
 import json
-import asyncio
 import logging
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from pypdf import PdfReader
 
 from app.config import settings
 from app.models.schemas import InterviewSetup
@@ -26,6 +27,30 @@ app.add_middleware(
 @app.get("/health")
 async def health():
     return {"status": "ok"}
+
+
+@app.post("/api/extract-pdf")
+async def extract_pdf(file: UploadFile = File(...)):
+    if not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF files are accepted")
+
+    contents = await file.read()
+    try:
+        reader = PdfReader(io.BytesIO(contents))
+    except Exception:
+        raise HTTPException(status_code=400, detail="Could not read PDF file")
+
+    text = ""
+    for page in reader.pages:
+        page_text = page.extract_text()
+        if page_text:
+            text += page_text + "\n"
+
+    text = text.strip()
+    if not text:
+        raise HTTPException(status_code=422, detail="No text could be extracted from this PDF")
+
+    return {"text": text, "pages": len(reader.pages)}
 
 
 @app.websocket("/ws/interview")

@@ -17,9 +17,9 @@ DEEPGRAM_WS_URL = (
     "&language=en"
     "&smart_format=true"
     "&interim_results=true"
-    "&utterance_end_ms=1500"
+    "&utterance_end_ms=3000"
     "&vad_events=true"
-    "&endpointing=300"
+    "&endpointing=800"
     "&encoding=linear16"
     "&sample_rate=16000"
 )

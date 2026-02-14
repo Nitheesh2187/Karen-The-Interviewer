@@ -5,3 +5,5 @@ groq
 python-dotenv
 pydantic-settings
 aiohttp
+pypdf
+python-multipart
