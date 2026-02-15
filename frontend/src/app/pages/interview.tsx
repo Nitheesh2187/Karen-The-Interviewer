@@ -21,6 +21,7 @@ export default function Interview() {
 
   const audioQueueRef = useRef<Blob[]>([]);
   const isPlayingRef = useRef(false);
+  const currentAudioRef = useRef<HTMLAudioElement | null>(null);
   const setupSentRef = useRef(false);
   const isReadyRef = useRef(false);
 
@@ -61,11 +62,24 @@ export default function Interview() {
     return new Blob([buffer], { type: 'audio/wav' });
   }, []);
 
+  // --- Stop all audio playback ---
+  const stopAllAudio = useCallback(() => {
+    audioQueueRef.current = [];
+    isPlayingRef.current = false;
+    if (currentAudioRef.current) {
+      currentAudioRef.current.pause();
+      currentAudioRef.current.src = '';
+      currentAudioRef.current = null;
+    }
+    setIsAgentSpeaking(false);
+  }, []);
+
   // --- Audio queue playback ---
   const playNextAudio = useCallback(() => {
     if (audioQueueRef.current.length === 0) {
       isPlayingRef.current = false;
       setIsAgentSpeaking(false);
+      currentAudioRef.current = null;
       return;
     }
 
@@ -74,6 +88,7 @@ export default function Interview() {
     const blob = audioQueueRef.current.shift()!;
     const url = URL.createObjectURL(blob);
     const audio = new Audio(url);
+    currentAudioRef.current = audio;
 
     audio.onended = () => {
       URL.revokeObjectURL(url);
@@ -122,6 +137,7 @@ export default function Interview() {
           break;
 
         case 'feedback':
+          stopAllAudio();
           setFeedbackData(data.data);
           navigate('/feedback');
           break;
@@ -139,7 +155,7 @@ export default function Interview() {
           break;
       }
     },
-    [navigate, setFeedbackData]
+    [navigate, setFeedbackData, stopAllAudio]
   );
 
   // --- Audio message handler (TTS) ---
@@ -177,7 +193,10 @@ export default function Interview() {
       return;
     }
     connect();
-    return () => disconnect();
+    return () => {
+      stopAllAudio();
+      disconnect();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -205,6 +224,7 @@ export default function Interview() {
 
   const handleEndCall = () => {
     stopRecording();
+    stopAllAudio();
     sendJson({ type: 'end_interview' });
     setStatusMessage('Generating feedback...');
   };
@@ -245,81 +265,95 @@ export default function Interview() {
 
       {/* Main Interview Area */}
       <div className="flex-1 p-4 relative">
-        {/* AI Box - Top Left */}
+        {/* AI Box - Top Left quadrant, anchored at bottom-right (inner corner near center) */}
         <motion.div
-          className="absolute top-4 left-4 bg-gradient-to-br from-indigo-500/20 to-purple-500/20 dark:from-indigo-500/30 dark:to-purple-500/30 rounded-3xl border-2 border-indigo-300 dark:border-indigo-600 backdrop-blur-sm overflow-hidden"
+          className="absolute rounded-3xl border-2 backdrop-blur-sm overflow-hidden"
+          style={{
+            right: 'calc(50% + 8px)',
+            bottom: 'calc(50% + 8px)',
+          }}
           animate={{
-            width: isAgentSpeaking ? '70%' : '28%',
-            height: isAgentSpeaking ? '70%' : '35%',
+            top: isAgentSpeaking ? '1rem' : '15%',
+            left: isAgentSpeaking ? '1rem' : '10%',
+            borderColor: isAgentSpeaking
+              ? 'rgba(99, 102, 241, 0.8)'
+              : 'rgba(99, 102, 241, 0.4)',
+            backgroundColor: isAgentSpeaking
+              ? 'rgba(99, 102, 241, 0.15)'
+              : 'rgba(99, 102, 241, 0.08)',
             boxShadow: isAgentSpeaking
               ? '0 20px 60px rgba(99, 102, 241, 0.4)'
-              : '0 10px 30px rgba(99, 102, 241, 0.2)',
+              : '0 10px 30px rgba(99, 102, 241, 0.15)',
           }}
           transition={{ duration: 0.5, ease: 'easeInOut' }}
         >
-          <div className="h-full flex flex-col items-center justify-center p-6">
-            {/* AI Avatar */}
-            <motion.div
-              className="relative mb-4"
-              animate={{ scale: isAgentSpeaking ? [1, 1.05, 1] : 1 }}
-              transition={{ duration: 0.8, repeat: isAgentSpeaking ? Infinity : 0 }}
-            >
-              <div
-                className={`rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center relative overflow-hidden transition-all duration-500 ${
-                  isAgentSpeaking ? 'w-28 h-28' : 'w-20 h-20'
-                }`}
+          <div className="h-full flex flex-col items-center p-6">
+            {/* AI Avatar - fixed, never pushed out */}
+            <div className="shrink-0 pt-2">
+              <motion.div
+                className="relative mb-4"
+                animate={{ scale: isAgentSpeaking ? [1, 1.05, 1] : 1 }}
+                transition={{ duration: 0.8, repeat: isAgentSpeaking ? Infinity : 0 }}
               >
-                <span
-                  className={`transition-all duration-500 ${
-                    isAgentSpeaking ? 'text-5xl' : 'text-3xl'
+                <div
+                  className={`rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center relative overflow-hidden transition-all duration-500 ${
+                    isAgentSpeaking ? 'w-28 h-28' : 'w-20 h-20'
                   }`}
                 >
-                  AI
-                </span>
+                  <span
+                    className={`text-white transition-all duration-500 ${
+                      isAgentSpeaking ? 'text-4xl' : 'text-2xl'
+                    }`}
+                  >
+                    AI
+                  </span>
 
-                {/* Speaking Animation Rings */}
-                <AnimatePresence>
-                  {isAgentSpeaking && (
-                    <>
-                      {[...Array(3)].map((_, i) => (
-                        <motion.div
-                          key={i}
-                          className="absolute inset-0 rounded-full border-4 border-indigo-400"
-                          initial={{ scale: 1, opacity: 0.5 }}
-                          animate={{ scale: 1.8 + i * 0.3, opacity: 0 }}
-                          exit={{ opacity: 0 }}
-                          transition={{
-                            duration: 1.5,
-                            repeat: Infinity,
-                            delay: i * 0.3,
-                          }}
-                        />
-                      ))}
-                    </>
-                  )}
-                </AnimatePresence>
-              </div>
-            </motion.div>
+                  {/* Speaking Animation Rings */}
+                  <AnimatePresence>
+                    {isAgentSpeaking && (
+                      <>
+                        {[...Array(3)].map((_, i) => (
+                          <motion.div
+                            key={i}
+                            className="absolute inset-0 rounded-full border-4 border-indigo-400"
+                            initial={{ scale: 1, opacity: 0.5 }}
+                            animate={{ scale: 1.8 + i * 0.3, opacity: 0 }}
+                            exit={{ opacity: 0 }}
+                            transition={{
+                              duration: 1.5,
+                              repeat: Infinity,
+                              delay: i * 0.3,
+                            }}
+                          />
+                        ))}
+                      </>
+                    )}
+                  </AnimatePresence>
+                </div>
+              </motion.div>
+            </div>
 
-            {/* AI Label */}
-            <motion.div className="text-center" animate={{ opacity: isAgentSpeaking ? 1 : 0.7 }}>
-              <h3
-                className={`text-slate-800 dark:text-white mb-1 transition-all duration-500 ${
-                  isAgentSpeaking ? 'text-2xl' : 'text-lg'
-                }`}
-              >
-                AI Interviewer
-              </h3>
-              <p
-                className={`text-indigo-600 dark:text-indigo-300 text-sm ${
-                  isAgentSpeaking ? 'opacity-100' : 'opacity-60'
-                }`}
-              >
-                {isAgentSpeaking ? 'Speaking...' : isProcessing ? 'Thinking...' : 'Listening...'}
-              </p>
-            </motion.div>
+            {/* AI Label - fixed */}
+            <div className="shrink-0">
+              <motion.div className="text-center" animate={{ opacity: isAgentSpeaking ? 1 : 0.7 }}>
+                <h3
+                  className={`text-slate-800 dark:text-white mb-1 transition-all duration-500 ${
+                    isAgentSpeaking ? 'text-2xl' : 'text-lg'
+                  }`}
+                >
+                  AI Interviewer
+                </h3>
+                <p
+                  className={`text-indigo-600 dark:text-indigo-300 text-sm ${
+                    isAgentSpeaking ? 'opacity-100' : 'opacity-60'
+                  }`}
+                >
+                  {isAgentSpeaking ? 'Speaking...' : isProcessing ? 'Thinking...' : 'Listening...'}
+                </p>
+              </motion.div>
+            </div>
 
-            {/* AI Message - Only show when AI is speaking */}
+            {/* AI Message - takes remaining space, scrolls internally */}
             <AnimatePresence mode="wait">
               {isAgentSpeaking && currentQuestion && (
                 <motion.div
@@ -327,9 +361,9 @@ export default function Interview() {
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0 }}
-                  className="mt-6 w-full"
+                  className="mt-4 w-full flex-1 min-h-0"
                 >
-                  <div className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-md rounded-2xl p-6 border border-indigo-200 dark:border-indigo-700 max-h-48 overflow-y-auto">
+                  <div className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-md rounded-2xl p-6 border border-indigo-200 dark:border-indigo-700 h-full overflow-y-auto">
                     <p className="text-slate-800 dark:text-white text-base leading-relaxed">
                       {currentQuestion}
                     </p>
@@ -338,7 +372,7 @@ export default function Interview() {
               )}
             </AnimatePresence>
 
-            {/* Listening Indicator (when not speaking or processing) */}
+            {/* Listening Indicator */}
             {!isAgentSpeaking && !isProcessing && isUserSpeaking && (
               <motion.div
                 initial={{ opacity: 0 }}
@@ -349,9 +383,7 @@ export default function Interview() {
                   <motion.div
                     key={i}
                     className="w-1 h-6 bg-indigo-400 dark:bg-indigo-500 rounded-full"
-                    animate={{
-                      scaleY: [1, 1.5, 1],
-                    }}
+                    animate={{ scaleY: [1, 1.5, 1] }}
                     transition={{
                       duration: 0.5,
                       repeat: Infinity,
@@ -364,104 +396,119 @@ export default function Interview() {
           </div>
         </motion.div>
 
-        {/* User Box - Bottom Right */}
+        {/* User Box - Bottom Right quadrant, anchored at top-left (inner corner near center) */}
         <motion.div
-          className="absolute bottom-4 right-4 bg-gradient-to-br from-green-500/20 to-emerald-500/20 dark:from-green-500/30 dark:to-emerald-500/30 rounded-3xl border-2 border-green-300 dark:border-green-600 backdrop-blur-sm overflow-hidden"
+          className="absolute rounded-3xl border-2 backdrop-blur-sm overflow-hidden"
+          style={{
+            left: 'calc(50% + 8px)',
+            top: 'calc(50% + 8px)',
+          }}
           animate={{
-            width: isUserSpeaking ? '70%' : '28%',
-            height: isUserSpeaking ? '70%' : '35%',
-            boxShadow:
-              isUserSpeaking
-                ? '0 20px 60px rgba(34, 197, 94, 0.4)'
-                : '0 10px 30px rgba(34, 197, 94, 0.2)',
+            bottom: isUserSpeaking ? '1rem' : '15%',
+            right: isUserSpeaking ? '1rem' : '10%',
+            borderColor: isUserSpeaking
+              ? 'rgba(34, 197, 94, 0.8)'
+              : 'rgba(34, 197, 94, 0.4)',
+            backgroundColor: isUserSpeaking
+              ? 'rgba(34, 197, 94, 0.15)'
+              : 'rgba(34, 197, 94, 0.08)',
+            boxShadow: isUserSpeaking
+              ? '0 20px 60px rgba(34, 197, 94, 0.4)'
+              : '0 10px 30px rgba(34, 197, 94, 0.15)',
           }}
           transition={{ duration: 0.5, ease: 'easeInOut' }}
         >
-          <div className="h-full flex flex-col items-center justify-center p-6">
-            {/* User Avatar */}
-            <motion.div
-              className="relative mb-4"
-              animate={{ scale: isUserSpeaking ? [1, 1.05, 1] : 1 }}
-              transition={{
-                duration: 0.8,
-                repeat: isUserSpeaking ? Infinity : 0,
-              }}
-            >
-              <div
-                className={`rounded-full bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center relative overflow-hidden transition-all duration-500 ${
-                  isUserSpeaking ? 'w-28 h-28' : 'w-20 h-20'
-                }`}
+          <div className="h-full flex flex-col items-center p-6">
+            {/* User Avatar - fixed, never pushed out */}
+            <div className="shrink-0 pt-2">
+              <motion.div
+                className="relative mb-4"
+                animate={{ scale: isUserSpeaking ? [1, 1.05, 1] : 1 }}
+                transition={{
+                  duration: 0.8,
+                  repeat: isUserSpeaking ? Infinity : 0,
+                }}
               >
-                <span
-                  className={`text-white transition-all duration-500 ${
-                    isUserSpeaking ? 'text-3xl' : 'text-xl'
+                <div
+                  className={`rounded-full bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center relative overflow-hidden transition-all duration-500 ${
+                    isUserSpeaking ? 'w-28 h-28' : 'w-20 h-20'
+                  }`}
+                >
+                  <span
+                    className={`text-white transition-all duration-500 ${
+                      isUserSpeaking ? 'text-2xl' : 'text-lg'
+                    }`}
+                  >
+                    You
+                  </span>
+
+                  {/* Speaking Animation Rings */}
+                  <AnimatePresence>
+                    {isUserSpeaking && (
+                      <>
+                        {[...Array(3)].map((_, i) => (
+                          <motion.div
+                            key={i}
+                            className="absolute inset-0 rounded-full border-4 border-green-400"
+                            initial={{ scale: 1, opacity: 0.5 }}
+                            animate={{ scale: 1.8 + i * 0.3, opacity: 0 }}
+                            exit={{ opacity: 0 }}
+                            transition={{
+                              duration: 1.5,
+                              repeat: Infinity,
+                              delay: i * 0.3,
+                            }}
+                          />
+                        ))}
+                      </>
+                    )}
+                  </AnimatePresence>
+
+                  {/* Muted Overlay */}
+                  {!isRecording && (
+                    <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                      <MicOff className="w-10 h-10 text-red-400" />
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            </div>
+
+            {/* User Label - fixed */}
+            <div className="shrink-0">
+              <motion.div className="text-center" animate={{ opacity: isUserSpeaking ? 1 : 0.7 }}>
+                <h3
+                  className={`text-slate-800 dark:text-white mb-1 transition-all duration-500 ${
+                    isUserSpeaking ? 'text-2xl' : 'text-lg'
                   }`}
                 >
                   You
-                </span>
+                </h3>
+                <p
+                  className={`text-green-600 dark:text-green-300 text-sm ${
+                    isUserSpeaking ? 'opacity-100' : 'opacity-60'
+                  }`}
+                >
+                  {!isRecording ? 'Muted' : isUserSpeaking ? 'Speaking...' : 'Listening...'}
+                </p>
+              </motion.div>
+            </div>
 
-                {/* Speaking Animation Rings */}
-                <AnimatePresence>
-                  {isUserSpeaking && (
-                    <>
-                      {[...Array(3)].map((_, i) => (
-                        <motion.div
-                          key={i}
-                          className="absolute inset-0 rounded-full border-4 border-green-400"
-                          initial={{ scale: 1, opacity: 0.5 }}
-                          animate={{ scale: 1.8 + i * 0.3, opacity: 0 }}
-                          exit={{ opacity: 0 }}
-                          transition={{
-                            duration: 1.5,
-                            repeat: Infinity,
-                            delay: i * 0.3,
-                          }}
-                        />
-                      ))}
-                    </>
-                  )}
-                </AnimatePresence>
-
-                {/* Muted Overlay */}
-                {!isRecording && (
-                  <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                    <MicOff className="w-10 h-10 text-red-400" />
-                  </div>
-                )}
-              </div>
-            </motion.div>
-
-            {/* User Label */}
-            <motion.div className="text-center" animate={{ opacity: isUserSpeaking ? 1 : 0.7 }}>
-              <h3
-                className={`text-slate-800 dark:text-white mb-1 transition-all duration-500 ${
-                  isUserSpeaking ? 'text-2xl' : 'text-lg'
-                }`}
-              >
-                You
-              </h3>
-              <p
-                className={`text-green-600 dark:text-green-300 text-sm ${
-                  isUserSpeaking ? 'opacity-100' : 'opacity-60'
-                }`}
-              >
-                {!isRecording ? 'Muted' : isUserSpeaking ? 'Speaking...' : 'Listening...'}
-              </p>
-            </motion.div>
-
-            {/* Interim transcript */}
+            {/* Interim transcript - takes remaining space, scrolls internally */}
             {isUserSpeaking && interimText && (
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 0.7 }}
-                className="mt-4 bg-white/60 dark:bg-slate-800/60 backdrop-blur-md rounded-xl p-3 border border-green-200 dark:border-green-700 max-h-32 overflow-y-auto"
+                className="mt-4 w-full flex-1 min-h-0"
               >
-                <p className="text-sm text-slate-600 dark:text-slate-300 italic">{interimText}</p>
+                <div className="bg-white/60 dark:bg-slate-800/60 backdrop-blur-md rounded-xl p-3 border border-green-200 dark:border-green-700 h-full overflow-y-auto">
+                  <p className="text-sm text-slate-600 dark:text-slate-300 italic">{interimText}</p>
+                </div>
               </motion.div>
             )}
 
             {/* Speaking Indicator */}
-            {isUserSpeaking && (
+            {isUserSpeaking && !interimText && (
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -471,9 +518,7 @@ export default function Interview() {
                   <motion.div
                     key={i}
                     className="w-2 h-10 bg-green-400 dark:bg-green-500 rounded-full"
-                    animate={{
-                      scaleY: [0.5, 1.5, 0.5],
-                    }}
+                    animate={{ scaleY: [0.5, 1.5, 0.5] }}
                     transition={{
                       duration: 0.6,
                       repeat: Infinity,
@@ -518,7 +563,7 @@ export default function Interview() {
         {/* Status */}
         <div className="text-center mt-4">
           <p className="text-sm text-slate-600 dark:text-slate-400">
-            {statusMessage} {questionNumber > 0 && `| Question ${questionNumber}`}
+            {statusMessage}
           </p>
         </div>
       </div>

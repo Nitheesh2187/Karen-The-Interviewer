@@ -79,9 +79,8 @@ class InterviewSession:
 
     async def handle_audio(self, audio_bytes: bytes):
         """Forward audio from frontend to STT."""
-        if not self._processing:
-            await self._ensure_stt()
-            await self.stt.send_audio(audio_bytes)
+        await self._ensure_stt()
+        await self.stt.send_audio(audio_bytes)
 
     async def _on_transcript(self, transcript: str, is_final: bool):
         """Callback from STT service when transcript is received."""

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router';
 import { useInterview } from '../context/interview-context';
 import { Button } from '../components/ui/button';
@@ -7,7 +7,7 @@ import { Label } from '../components/ui/label';
 import { Textarea } from '../components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
-import { Briefcase, FileText, ArrowRight, ArrowLeft, Sparkles } from 'lucide-react';
+import { Briefcase, FileText, ArrowRight, ArrowLeft, Sparkles, Upload, X, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ThemeToggle } from '../components/theme-toggle';
 
@@ -15,6 +15,10 @@ export default function Setup() {
   const navigate = useNavigate();
   const { setInterviewData } = useInterview();
   const [step, setStep] = useState(1);
+  const [resumeFile, setResumeFile] = useState<File | null>(null);
+  const [extracting, setExtracting] = useState(false);
+  const [extractError, setExtractError] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [formData, setFormData] = useState({
     jobRole: '',
     experience: '',
@@ -22,14 +26,50 @@ export default function Setup() {
     resume: '',
   });
 
-  const handleNext = () => {
-    if (step < 3) {
-      setStep(step + 1);
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !file.name.toLowerCase().endsWith('.pdf')) return;
+
+    setResumeFile(file);
+    setExtractError('');
+    setExtracting(true);
+
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await fetch('/api/extract-pdf', { method: 'POST', body: fd });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: 'Upload failed' }));
+        throw new Error(err.detail || 'Upload failed');
+      }
+
+      const { text } = await res.json();
+      setFormData((prev) => ({ ...prev, resume: text }));
+    } catch (err: any) {
+      setExtractError(err.message || 'Failed to extract text from PDF');
+      setResumeFile(null);
+      setFormData((prev) => ({ ...prev, resume: '' }));
+    } finally {
+      setExtracting(false);
     }
   };
 
+  const handleRemoveFile = () => {
+    setResumeFile(null);
+    setFormData({ ...formData, resume: '' });
+    setExtractError('');
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const handleNext = () => {
+    if (step < 3) setStep(step + 1);
+  };
+
   const handleBack = () => {
-    if (step > 1) {
+    if (step === 1) {
+      navigate('/');
+    } else {
       setStep(step - 1);
     }
   };
@@ -41,12 +81,10 @@ export default function Setup() {
 
   const isStep1Valid = formData.jobRole && formData.experience && formData.jobDescription;
   const isStep2Valid = formData.resume.trim().length > 0;
-
   const canProceed = step === 1 ? isStep1Valid : step === 2 ? isStep2Valid : true;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50 dark:from-slate-950 dark:via-slate-900 dark:to-indigo-950 flex items-center justify-center p-4">
-      {/* Theme Toggle */}
       <div className="fixed top-4 right-4 z-50">
         <ThemeToggle />
       </div>
@@ -77,7 +115,7 @@ export default function Setup() {
                       ? 'bg-gradient-to-br from-indigo-500 to-purple-600 text-white scale-110'
                       : s < step
                       ? 'bg-green-500 text-white'
-                      : 'bg-gray-200 text-gray-500'
+                      : 'bg-gray-200 dark:bg-slate-700 text-gray-500 dark:text-slate-400'
                   }`}
                 >
                   {s}
@@ -85,14 +123,14 @@ export default function Setup() {
                 {s < 3 && (
                   <div
                     className={`w-12 h-1 mx-1 rounded ${
-                      s < step ? 'bg-green-500' : 'bg-gray-200'
+                      s < step ? 'bg-green-500' : 'bg-gray-200 dark:bg-slate-700'
                     }`}
                   />
                 )}
               </div>
             ))}
           </div>
-          <div className="text-center text-sm text-gray-600">
+          <div className="text-center text-sm text-gray-600 dark:text-slate-400">
             {step === 1 && 'Job Details'}
             {step === 2 && 'Your Resume'}
             {step === 3 && 'Ready to Start'}
@@ -160,7 +198,7 @@ export default function Setup() {
               </motion.div>
             )}
 
-            {/* Step 2: Resume */}
+            {/* Step 2: Resume PDF Upload */}
             {step === 2 && (
               <motion.div
                 key="step2"
@@ -171,19 +209,76 @@ export default function Setup() {
                 className="space-y-6"
               >
                 <div className="space-y-4">
-                  <Label htmlFor="resume" className="flex items-center gap-2 text-base">
-                    <FileText className="w-4 h-4" />
-                    Your Resume
+                  <Label className="flex items-center gap-2 text-base">
+                    <Upload className="w-4 h-4" />
+                    Upload Resume (PDF)
                   </Label>
-                  <Textarea
-                    id="resume"
-                    placeholder="Paste your resume content here..."
-                    value={formData.resume}
-                    onChange={(e) => setFormData({ ...formData, resume: e.target.value })}
-                    className="min-h-[300px] resize-y"
-                  />
-                  <p className="text-sm text-gray-500 dark:text-gray-400">
-                    Paste your resume text to help the AI understand your background and experience
+
+                  {!resumeFile ? (
+                    <div
+                      className="border-2 border-dashed border-gray-300 dark:border-slate-600 rounded-lg p-12 text-center hover:border-indigo-400 dark:hover:border-indigo-500 transition-colors cursor-pointer bg-gray-50 dark:bg-slate-800/50"
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="application/pdf"
+                        onChange={handleFileChange}
+                        className="hidden"
+                      />
+                      <div className="flex flex-col items-center gap-4">
+                        <div className="p-4 bg-indigo-100 dark:bg-indigo-900/30 rounded-full">
+                          <FileText className="w-8 h-8 text-indigo-600 dark:text-indigo-400" />
+                        </div>
+                        <div>
+                          <p className="text-lg font-medium text-gray-700 dark:text-slate-200">
+                            Drop your resume here or click to browse
+                          </p>
+                          <p className="text-sm text-gray-500 dark:text-slate-400 mt-1">
+                            PDF files only
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ) : extracting ? (
+                    <div className="border-2 border-indigo-300 dark:border-indigo-600 rounded-lg p-8 bg-indigo-50 dark:bg-indigo-900/20 flex flex-col items-center gap-3">
+                      <Loader2 className="w-8 h-8 text-indigo-600 dark:text-indigo-400 animate-spin" />
+                      <p className="text-gray-700 dark:text-slate-200">Extracting text from PDF...</p>
+                    </div>
+                  ) : (
+                    <div className="border-2 border-green-300 dark:border-green-600 rounded-lg p-6 bg-green-50 dark:bg-green-900/20">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="p-3 bg-green-100 dark:bg-green-900/30 rounded-lg">
+                            <FileText className="w-6 h-6 text-green-600 dark:text-green-400" />
+                          </div>
+                          <div>
+                            <p className="font-medium text-gray-900 dark:text-slate-100">
+                              {resumeFile.name}
+                            </p>
+                            <p className="text-sm text-gray-500 dark:text-slate-400">
+                              {(resumeFile.size / 1024).toFixed(1)} KB
+                            </p>
+                          </div>
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          onClick={handleRemoveFile}
+                          className="hover:bg-red-50 dark:hover:bg-red-900/20"
+                        >
+                          <X className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  {extractError && (
+                    <p className="text-sm text-red-600 dark:text-red-400">{extractError}</p>
+                  )}
+
+                  <p className="text-sm text-gray-500 dark:text-slate-400">
+                    Upload your resume to help the AI understand your background and experience
                   </p>
                 </div>
               </motion.div>
@@ -201,50 +296,61 @@ export default function Setup() {
               >
                 <div className="text-center space-y-6">
                   <div className="flex justify-center">
-                    <div className="p-6 bg-gradient-to-br from-indigo-100 to-purple-100 rounded-full">
-                      <Sparkles className="w-16 h-16 text-indigo-600" />
+                    <div className="p-6 bg-gradient-to-br from-indigo-100 to-purple-100 dark:from-indigo-900/30 dark:to-purple-900/30 rounded-full">
+                      <Sparkles className="w-16 h-16 text-indigo-600 dark:text-indigo-400" />
                     </div>
                   </div>
                   <div>
-                    <h3 className="text-2xl mb-2">You're All Set!</h3>
-                    <p className="text-gray-600">
+                    <h3 className="text-2xl mb-2 dark:text-white">You're All Set!</h3>
+                    <p className="text-gray-600 dark:text-slate-300">
                       Your AI interviewer is ready to have a natural conversation with you
                     </p>
                   </div>
 
-                  <Card className="bg-gradient-to-br from-indigo-50 to-purple-50 border-indigo-200">
+                  <Card className="bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-950/40 dark:to-purple-950/40 border-indigo-200 dark:border-indigo-800">
                     <CardContent className="p-6 space-y-4">
-                      <h4 className="font-medium">Interview Details</h4>
+                      <h4 className="font-medium dark:text-white">Interview Details</h4>
                       <div className="space-y-3 text-sm text-left">
                         <div className="flex justify-between">
-                          <span className="text-gray-600">Role:</span>
-                          <span className="font-medium">{formData.jobRole}</span>
+                          <span className="text-gray-600 dark:text-slate-400">Role:</span>
+                          <span className="font-medium dark:text-white">{formData.jobRole}</span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-gray-600">Experience:</span>
-                          <span className="font-medium capitalize">{formData.experience} Level</span>
+                          <span className="text-gray-600 dark:text-slate-400">Experience:</span>
+                          <span className="font-medium capitalize dark:text-white">{formData.experience} Level</span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-gray-600">Format:</span>
-                          <span className="font-medium">Conversational Interview</span>
+                          <span className="text-gray-600 dark:text-slate-400">Format:</span>
+                          <span className="font-medium dark:text-white">Conversational Interview</span>
                         </div>
                       </div>
                     </CardContent>
                   </Card>
 
-                  <div className="space-y-3 text-sm text-gray-600">
+                  <div className="space-y-3 text-sm text-gray-600 dark:text-slate-400">
                     <p>Tip: Speak naturally as you would in a real interview</p>
                     <p>Make sure your microphone is working</p>
                   </div>
 
-                  <Button
-                    onClick={handleStartInterview}
-                    size="lg"
-                    className="w-full h-14 text-lg bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700"
-                  >
-                    Start Interview
-                    <ArrowRight className="w-5 h-5 ml-2" />
-                  </Button>
+                  <div className="flex gap-3">
+                    <Button
+                      variant="outline"
+                      onClick={handleBack}
+                      size="lg"
+                      className="h-14 px-6"
+                    >
+                      <ArrowLeft className="w-5 h-5 mr-2" />
+                      Back
+                    </Button>
+                    <Button
+                      onClick={handleStartInterview}
+                      size="lg"
+                      className="flex-1 h-14 text-lg bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700"
+                    >
+                      Start Interview
+                      <ArrowRight className="w-5 h-5 ml-2" />
+                    </Button>
+                  </div>
                 </div>
               </motion.div>
             )}
@@ -252,11 +358,10 @@ export default function Setup() {
 
           {/* Navigation Buttons */}
           {step < 3 && (
-            <div className="flex justify-between items-center pt-8 mt-8 border-t">
+            <div className="flex justify-between items-center pt-8 mt-8 border-t dark:border-slate-700">
               <Button
                 variant="outline"
                 onClick={handleBack}
-                disabled={step === 1}
                 className="gap-2"
               >
                 <ArrowLeft className="w-4 h-4" />
