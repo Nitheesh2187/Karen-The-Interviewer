@@ -93,10 +93,12 @@ class InterviewSession:
         if is_final and transcript.strip():
             self._current_transcript += " " + transcript.strip()
 
-            # Use a small delay to accumulate final segments into a complete answer
-            if hasattr(self, "_answer_timer"):
-                self._answer_timer.cancel()
+        # Reset timer on ANY transcript (interim or final) — proves user is still speaking
+        if transcript.strip() and hasattr(self, "_answer_timer"):
+            self._answer_timer.cancel()
 
+        # Only start the timer if we have accumulated text to process
+        if self._current_transcript.strip():
             self._answer_timer = asyncio.get_event_loop().call_later(
                 5.0, lambda: asyncio.ensure_future(self._process_answer())
             )

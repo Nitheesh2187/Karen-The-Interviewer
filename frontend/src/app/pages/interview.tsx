@@ -17,6 +17,7 @@ export default function Interview() {
   const [currentQuestion, setCurrentQuestion] = useState('');
   const [questionNumber, setQuestionNumber] = useState(0);
   const [interimText, setInterimText] = useState('');
+  const [finalizedText, setFinalizedText] = useState('');
   const [isReady, setIsReady] = useState(false);
 
   const audioQueueRef = useRef<Blob[]>([]);
@@ -119,6 +120,7 @@ export default function Interview() {
       switch (data.type) {
         case 'transcript':
           if (data.is_final) {
+            setFinalizedText(prev => prev + (prev ? ' ' : '') + data.text);
             setInterimText('');
           } else {
             setInterimText(data.text);
@@ -129,6 +131,8 @@ export default function Interview() {
           setCurrentQuestion(data.text);
           setQuestionNumber(data.question_number);
           setIsProcessing(false);
+          setFinalizedText('');
+          setInterimText('');
           setStatusMessage(`Question ${data.question_number}`);
           if (!isReadyRef.current) {
             isReadyRef.current = true;
@@ -494,21 +498,24 @@ export default function Interview() {
               </motion.div>
             </div>
 
-            {/* Interim transcript - takes remaining space, scrolls internally */}
-            {isUserSpeaking && interimText && (
+            {/* Live transcript - shows finalized + interim text */}
+            {isUserSpeaking && (finalizedText || interimText) && (
               <motion.div
                 initial={{ opacity: 0 }}
-                animate={{ opacity: 0.7 }}
+                animate={{ opacity: 1 }}
                 className="mt-4 w-full flex-1 min-h-0"
               >
                 <div className="bg-white/60 dark:bg-slate-800/60 backdrop-blur-md rounded-xl p-3 border border-green-200 dark:border-green-700 h-full overflow-y-auto">
-                  <p className="text-sm text-slate-600 dark:text-slate-300 italic">{interimText}</p>
+                  <p className="text-sm text-slate-600 dark:text-slate-300">
+                    {finalizedText && <span>{finalizedText} </span>}
+                    {interimText && <span className="italic opacity-70">{interimText}</span>}
+                  </p>
                 </div>
               </motion.div>
             )}
 
             {/* Speaking Indicator */}
-            {isUserSpeaking && !interimText && (
+            {isUserSpeaking && !interimText && !finalizedText && (
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
