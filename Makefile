@@ -1,4 +1,4 @@
-.PHONY: backend frontend dev install-backend install-frontend install
+.PHONY: backend frontend dev install-backend install-frontend install test
 
 # Install dependencies
 install-backend:
@@ -18,3 +18,7 @@ frontend:
 
 # Run both (requires 'make -j2 dev' or run backend/frontend in separate terminals)
 dev: backend frontend
+
+# Tests
+test:
+	cd backend && python3 -m pytest -v
