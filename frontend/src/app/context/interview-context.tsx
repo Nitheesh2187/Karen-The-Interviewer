@@ -20,6 +20,7 @@ export interface FeedbackData {
   improvements: string[];
   question_feedback: {
     question: string;
+    answer: string;
     feedback: string;
     score: number;
   }[];

@@ -14,22 +14,15 @@ class Message(BaseModel):
     content: str
 
 
-class FeedbackScore(BaseModel):
-    relevance: float
-    depth: float
-    clarity: float
-    technical_accuracy: float
-
-
 class QuestionFeedback(BaseModel):
     question: str
     answer: str
-    scores: FeedbackScore
-    comments: str
+    feedback: str
+    score: float  # 0-100
 
 
 class InterviewFeedback(BaseModel):
-    overall_score: float
+    overall_score: float  # 0-100
     overall_assessment: str
     strengths: list[str]
     improvements: list[str]

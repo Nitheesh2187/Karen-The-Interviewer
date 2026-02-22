@@ -155,15 +155,6 @@ class InterviewSession:
                 self.setup.experience_level,
             )
             feedback_text = await self.llm.generate_feedback(feedback_prompt)
-
-            # Clean up markdown fencing if present
-            if feedback_text.startswith("```"):
-                lines = feedback_text.split("\n")
-                lines = lines[1:]  # remove opening fence
-                if lines and lines[-1].strip() == "```":
-                    lines = lines[:-1]
-                feedback_text = "\n".join(lines)
-
             feedback_data = json.loads(feedback_text)
 
             await self._send_json({

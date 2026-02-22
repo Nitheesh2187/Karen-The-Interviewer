@@ -229,11 +229,11 @@ async def test_end_sends_feedback():
     assert feedback_call["data"]["overall_score"] == 8
 
 
-async def test_end_strips_markdown_fencing():
-    """end() should handle LLM wrapping JSON in ```markdown``` fences."""
+async def test_end_parses_valid_json_feedback():
+    """end() should parse valid JSON feedback from LLM."""
     mock_ws = AsyncMock()
     mock_llm = AsyncMock()
-    mock_llm.generate_feedback = AsyncMock(return_value='```json\n{"overall_score": 7}\n```')
+    mock_llm.generate_feedback = AsyncMock(return_value='{"overall_score": 7, "overall_assessment": "Solid", "strengths": [], "improvements": [], "question_feedback": []}')
 
     session = _make_session(mock_ws=mock_ws, mock_llm=mock_llm)
 

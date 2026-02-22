@@ -226,6 +226,16 @@ export default function Feedback() {
                       </div>
                     </div>
 
+                    {/* Your Answer */}
+                    {item.answer && (
+                      <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-4 border border-green-200 dark:border-green-800">
+                        <p className="text-xs font-medium text-green-700 dark:text-green-400 mb-1">Your Answer</p>
+                        <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
+                          {item.answer}
+                        </p>
+                      </div>
+                    )}
+
                     {/* Score Progress */}
                     <Progress value={item.score} className="h-2" />
 
