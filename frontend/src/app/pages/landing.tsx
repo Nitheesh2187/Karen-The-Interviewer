@@ -79,7 +79,7 @@ export default function Landing() {
           className={`flex items-center justify-center gap-6 pt-8 ${showLinks ? '' : 'opacity-0'}`}
         >
           <a
-            href="https://github.com/nitheesh"
+            href="https://github.com/Nitheesh2187/The-Interviewer"
             target="_blank"
             rel="noopener noreferrer"
             className="text-slate-600 hover:text-white transition-colors"
@@ -87,7 +87,7 @@ export default function Landing() {
             <Github className="w-5 h-5" />
           </a>
           <a
-            href="https://linkedin.com/in/nitheesh"
+            href="https://www.linkedin.com/in/nitheesh22/"
             target="_blank"
             rel="noopener noreferrer"
             className="text-slate-600 hover:text-white transition-colors"
@@ -95,7 +95,7 @@ export default function Landing() {
             <Linkedin className="w-5 h-5" />
           </a>
           <a
-            href="https://nitheesh.dev"
+            href="https://nitheesh-bopparaju.vercel.app/"
             target="_blank"
             rel="noopener noreferrer"
             className="text-slate-600 hover:text-white transition-colors"

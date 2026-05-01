@@ -4,17 +4,40 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Running the Application
 
-**Backend** (FastAPI, runs on port 8000):
+A root `Makefile` wraps the common workflows:
+
 ```bash
-cd backend && pip install -r requirements.txt && python3 -m uvicorn app.main:app --port 8000 --reload
+make install        # install backend (pip) + frontend (npm) deps
+make backend        # uvicorn on :8000 with --reload
+make frontend       # vite dev server on :5173
+make -j2 dev        # run both in parallel (or use two terminals)
+make test           # run backend pytest suite
 ```
 
-**Frontend** (React + Vite, runs on port 5173):
+Manual equivalents:
+
 ```bash
+cd backend && pip install -r requirements.txt && python3 -m uvicorn app.main:app --port 8000 --reload
 cd frontend && npm install && npm run dev
 ```
 
-Both must run simultaneously. The Vite dev server proxies `/ws/*`, `/api/*`, and `/health` to `localhost:8000`, so frontend code uses relative paths (e.g. `/ws/interview`, `/api/extract-pdf`).
+Both backend and frontend must run simultaneously. The Vite dev server proxies `/ws/*`, `/api/*`, and `/health` to `localhost:8000`, so frontend code uses relative paths (e.g. `/ws/interview`, `/api/extract-pdf`).
+
+## Testing
+
+Backend tests live in `backend/tests/` and use `pytest` with `pytest-asyncio` (`asyncio_mode = auto` in `pytest.ini`). `conftest.py` exposes two fixtures:
+
+- `client` — `fastapi.testclient.TestClient` for synchronous endpoint tests.
+- `async_client` — `httpx.AsyncClient` over `ASGITransport` for async endpoint tests.
+
+Run a single test file or test:
+
+```bash
+cd backend && python3 -m pytest tests/test_llm.py -v
+cd backend && python3 -m pytest -k test_extract_pdf -v
+```
+
+There is no frontend test runner configured.
 
 ## Environment
 
@@ -50,7 +73,8 @@ Browser audio playback ← WebSocket ← PCM16 24kHz audio bytes
 - **`services/stt.py`** — Raw WebSocket to Deepgram Nova-2 (not SDK). Streams PCM16 audio, receives JSON transcripts with `is_final` flags. Lazy-connected on first audio chunk.
 - **`services/llm.py`** — Groq SDK (`llama-3.3-70b-versatile`). Maintains chat history. `generate_response()` for Q&A, `generate_feedback()` for post-interview structured JSON analysis.
 - **`services/tts.py`** — Deepgram Aura TTS (`aura-asteria-en`) via `aiohttp` REST. Returns raw PCM16 at 24kHz.
-- **`prompts/`** — `interviewer.py` sets interviewer persona with JD/resume context. `feedback.py` instructs LLM to return structured JSON scores.
+- **`prompts/`** — `interviewer.py` sets interviewer persona with JD/resume context. `feedback.py` instructs LLM to return structured JSON scores (overall_score, overall_assessment, strengths, improvements, per-question feedback with verbatim answer + 0–100 score).
+- **`models/schemas.py`** — Pydantic schemas for the feedback JSON contract. Keep these in sync with the JSON shape produced by `prompts/feedback.py` and consumed by the frontend `feedback.tsx`.
 
 ### Frontend (`frontend/src/`)
 
@@ -62,6 +86,7 @@ Five-screen flow via React Router: Landing → Setup → Preparing → Interview
 - **`app/context/interview-context.tsx`** — React Context for global state (interview setup data, feedback data). Wraps all routes via `pages/root.tsx`.
 - **`app/components/ui/`** — shadcn/ui component library (Radix UI + Tailwind). Pre-built accessible components.
 - **Styling** — Tailwind CSS v4 (`@tailwindcss/vite` plugin), theme tokens in `styles/theme.css` (oklch colors, light/dark mode via `next-themes`).
+- **Path alias** — `vite.config.ts` aliases `@/` to `frontend/src/`. Prefer `@/app/...` imports over deep relative paths.
 
 ### WebSocket Message Protocol
 
